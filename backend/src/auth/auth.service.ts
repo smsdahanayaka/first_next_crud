@@ -1,55 +1,54 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { CreateUserDto } from 'src/user/dto/create_user.dto';
 import { UserService } from 'src/user/user.service';
 
 @Injectable()
 export class AuthService {
-    constructor(
+  // LOAD USERSERVISE AND JWT SERVICE
+  constructor(
     private usersService: UserService,
     private jwtService: JwtService,
   ) {}
 
-  // Dummy user (in real app, use DB)
-  private users = [{ id: 1, username: 'user1', password: bcrypt.hashSync('1234', 10) }];
-
-  // async validateUser(username: string, password: string): Promise<any> {
-  //   const user = this.users.find(u => u.username === username);
-  //   if (user && await bcrypt.compare(password, user.password)) {
-  //     const { password, ...result } = user;
-  //     return result;
-  //   }
-  //   return null;
-  // }
-
-  // async login(user: any) {
-  //   const payload = { username: user.username, sub: user.id };
-  //   return {
-  //     access_token: this.jwtService.sign(payload),
-  //   };
-  // }
-
+  // VALIDATE - FUNCTION OF VALIDATE IS USER OR NOT
   async validateUser(username: string, password: string): Promise<any> {
     const user = await this.usersService.findOneByUsername(username);
     if (user && (await bcrypt.compare(password, user.password))) {
-      const { password, ...result } = user;
+      const { password, ...result } = user; // send user data without password
       return result;
     }
     return null;
   }
 
+  // LOGIN - FUNCTION OF LOGIN USER
   async login(user: any) {
-    const payload = { email: user.email, sub: user.id };
+    const payload = { sub: user.id, username: user.username };
+    const token = this.jwtService.sign(payload);
+
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: token,
+      user,
     };
   }
 
-  // async register(userData: { name: string; email: string; password: string }) {
-  //   const hashedPassword = await bcrypt.hash(userData.password, 10);
-  //   return this.usersService.create({
-  //     ...userData,
-  //     password: hashedPassword,
-  //   });
-  // }
+  // INSERT - FUNCTION OF REGISTER NEW USER
+  async register(createUserDto: CreateUserDto) {
+    const userExists = await this.usersService.findOneByEmail(
+      createUserDto.email,
+    );
+    if (userExists) {
+      throw new ConflictException('Email already registered');
+    }
+
+    const user = await this.usersService.create(createUserDto);
+    const payload = { sub: user.id, username: user.username };
+    const token = this.jwtService.sign(payload);
+
+    return {
+      message: 'User registered successfully',
+      access_token: token,
+    };
+  }
 }
